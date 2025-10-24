@@ -65,18 +65,43 @@ const FileTableRow = ({
   setDefaultPreview,
   decimalSizeDisplay,
   fileError,
+  uppy,
 }) => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const isDefaultPreview = defaultPreview === file.name;
 
+  const removeFromUploader = () => {
+    if (file.cancelUploadFn) {
+      try {
+        file.cancelUploadFn();
+      } catch (error) {
+        console.error("Error cancelling ongoing upload", error, file);
+      }
+    }
+
+    if (uppy && file.uppyId) {
+      const uppyFile = uppy.getFile(file.uppyId);
+      if (uppyFile) {
+        uppy.setFileMeta(file.uppyId, {
+          ...(uppyFile.meta ?? {}),
+          skipBackendRemoval: true,
+        });
+        uppy.removeFile(file.uppyId);
+      }
+    }
+  };
+
   const handleDelete = async (file) => {
     setIsDeleting(true);
+    removeFromUploader();
+
     try {
       await deleteFile(file);
       if (isDefaultPreview) {
         setDefaultPreview("");
       }
+      setIsDeleting(false);
     } catch (error) {
       setIsDeleting(false);
       console.error(error);
@@ -209,6 +234,7 @@ FileTableRow.propTypes = {
   setDefaultPreview: PropTypes.func.isRequired,
   decimalSizeDisplay: PropTypes.bool,
   fileError: PropTypes.object,
+  uppy: PropTypes.object,
 };
 
 FileTableRow.defaultProps = {
@@ -217,6 +243,7 @@ FileTableRow.defaultProps = {
   defaultPreview: undefined,
   decimalSizeDisplay: false,
   fileError: undefined,
+  uppy: undefined,
 };
 
 const FileUploadBox = ({
@@ -284,6 +311,7 @@ export const FilesListTable = ({
   filesList,
   deleteFile,
   decimalSizeDisplay,
+  uppy,
 }) => {
   const { errors, setFieldValue, values: formikDraft } = useFormikContext();
   const defaultPreview = _get(formikDraft, "files.default_preview", "");
@@ -304,6 +332,7 @@ export const FilesListTable = ({
               }
               decimalSizeDisplay={decimalSizeDisplay}
               fileError={getIn(errors, "files.entries." + file.name, undefined)}
+              uppy={uppy}
             />
           );
         })}
@@ -317,6 +346,7 @@ FilesListTable.propTypes = {
   filesList: PropTypes.array,
   deleteFile: PropTypes.func,
   decimalSizeDisplay: PropTypes.bool,
+  uppy: PropTypes.object,
 };
 
 FilesListTable.defaultProps = {
@@ -324,6 +354,7 @@ FilesListTable.defaultProps = {
   filesList: undefined,
   deleteFile: undefined,
   decimalSizeDisplay: undefined,
+  uppy: undefined,
 };
 
 export class FileUploaderArea extends Component {

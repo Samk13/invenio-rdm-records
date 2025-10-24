@@ -73,16 +73,67 @@ export const uploadFiles = (draft, files) => {
   };
 };
 
+const normalizeName = (name) => name?.normalize?.() ?? name ?? "";
+
 export const initializeFileUpload = (draft, file) => {
-  return async (dispatch, _, config) => {
+  return async (dispatch, getState, config) => {
+    dispatch({
+      type: FILE_UPLOAD_ADDED,
+      payload: {
+        filename: file.name,
+        uppyFileId: file.id,
+      },
+    });
+
     try {
+      const initializedFile = await config.service.files.initializeUpload(
+        draft.links.files,
+        file
+      );
+
+      const responseFilename = initializedFile?.key ?? file.name;
+      const normalizedOriginalFilename = normalizeName(file.name);
+      const normalizedResponseFilename = normalizeName(responseFilename);
+
+      const entries = getState()?.files?.entries ?? {};
+      const hasEntry = (key) => key && Object.hasOwn(entries, key);
+
+      if (!hasEntry(normalizedOriginalFilename) && !hasEntry(normalizedResponseFilename)) {
+        if (initializedFile?.links) {
+          try {
+            await config.service.files.delete(initializedFile.links);
+          } catch (cleanupError) {
+            console.error(
+              "Error cleaning up abandoned initialized upload",
+              cleanupError,
+              initializedFile
+            );
+          }
+        }
+        return initializedFile;
+      }
+
+      if (responseFilename !== file.name) {
+        dispatch({
+          type: FILE_DELETED_SUCCESS,
+          payload: {
+            filename: file.name,
+          },
+        });
+      }
+
       dispatch({
         type: FILE_UPLOAD_ADDED,
         payload: {
-          filename: file.name,
+          filename: responseFilename,
+          links: initializedFile?.links ?? null,
+          size: initializedFile?.size ?? 0,
+          checksum: initializedFile?.checksum ?? null,
+          uppyFileId: file.id,
         },
       });
-      return await config.service.files.initializeUpload(draft.links.files, file);
+
+      return initializedFile;
     } catch (error) {
       const axiosError = error?.t0 && error.t0.isAxiosError ? error.t0 : error;
 
@@ -130,6 +181,17 @@ export const deleteFile = (file) => {
   return async (dispatch, _, config) => {
     try {
       const fileLinks = file.meta?.links || file.links;
+
+      if (!fileLinks) {
+        dispatch({
+          type: FILE_DELETED_SUCCESS,
+          payload: {
+            filename: file.name,
+          },
+        });
+        return;
+      }
+
       await config.service.files.delete(fileLinks);
 
       dispatch({
@@ -139,11 +201,13 @@ export const deleteFile = (file) => {
         },
       });
     } catch (error) {
-      if (
-        error.response?.status === 404 &&
-        (file.uploadState?.isPending || !file.progress?.uploadComplete)
-      ) {
-        // pending file was removed from the backend thus we can remove it from the state
+      const isPendingLike =
+        file.uploadState?.isPending ||
+        file.uploadState?.isFailed ||
+        file.uploadState?.isUploading;
+
+      if (isPendingLike && (!error.response || [404, 409, 410, 500].includes(error.response.status))) {
+        // Pending/failed file may not exist server-side; treat as successfully removed locally.
         dispatch({
           type: FILE_DELETED_SUCCESS,
           payload: {

@@ -36,24 +36,40 @@ const fileReducer = (state = initialState, action) => {
   // Filename needs to be normalised due to encoding differences between client and server.
   const remoteFileName = action.payload?.filename?.normalize() ?? "";
   switch (action.type) {
-    case FILE_UPLOAD_ADDED:
+    case FILE_UPLOAD_ADDED: {
+      if (!remoteFileName) {
+        return state;
+      }
+      const existingEntry = state.entries?.[remoteFileName] ?? {};
+      const displayName = existingEntry.name ?? remoteFileName;
       return {
         ...state,
         entries: {
           ...state.entries,
           [remoteFileName]: {
-            progressPercentage: 0,
-            name: remoteFileName,
-            size: 0,
+            progressPercentage: existingEntry.progressPercentage ?? 0,
+            name: displayName,
+            size:
+              action.payload?.size ??
+              existingEntry.size ??
+              0,
             status: UploadState.pending,
-            checksum: null,
-            links: null,
-            cancelUploadFn: null,
+            checksum:
+              action.payload?.checksum ??
+              existingEntry.checksum ??
+              null,
+            links: action.payload?.links ?? existingEntry.links ?? null,
+            cancelUploadFn: existingEntry.cancelUploadFn ?? null,
+            uppyFileId: action.payload?.uppyFileId ?? existingEntry.uppyFileId ?? null,
           },
         },
         actionState: action.type,
       };
+    }
     case FILE_UPLOAD_IN_PROGRESS:
+      if (!remoteFileName || !state.entries?.[remoteFileName]) {
+        return state;
+      }
       return {
         ...state,
         entries: {
@@ -68,6 +84,9 @@ const fileReducer = (state = initialState, action) => {
         actionState: action.type,
       };
     case FILE_UPLOAD_FINISHED:
+      if (!remoteFileName || !state.entries?.[remoteFileName]) {
+        return state;
+      }
       newState = {
         ...state,
         entries: {
@@ -98,6 +117,9 @@ const fileReducer = (state = initialState, action) => {
         actionState: action.type,
       };
     case FILE_UPLOAD_FAILED:
+      if (!remoteFileName || !state.entries?.[remoteFileName]) {
+        return state;
+      }
       newState = {
         ...state,
         entries: {
@@ -105,6 +127,7 @@ const fileReducer = (state = initialState, action) => {
           [remoteFileName]: {
             ...state.entries[remoteFileName],
             status: UploadState.failed,
+            progressPercentage: 0,
             cancelUploadFn: null,
           },
         },
@@ -117,6 +140,9 @@ const fileReducer = (state = initialState, action) => {
         actionState: action.type,
       };
     case FILE_UPLOAD_SET_CANCEL_FUNCTION:
+      if (!remoteFileName || !state.entries?.[remoteFileName]) {
+        return state;
+      }
       return {
         ...state,
         entries: {
@@ -129,6 +155,9 @@ const fileReducer = (state = initialState, action) => {
         actionState: action.type,
       };
     case FILE_UPLOAD_CANCELLED: {
+      if (!remoteFileName || !state.entries?.[remoteFileName]) {
+        return state;
+      }
       // eslint-disable-next-line no-unused-vars
       const { [remoteFileName]: cancelledFile, ...afterCancellationEntriesState } =
         state.entries;
@@ -144,6 +173,9 @@ const fileReducer = (state = initialState, action) => {
       };
     }
     case FILE_DELETED_SUCCESS: {
+      if (!remoteFileName || !state.entries?.[remoteFileName]) {
+        return state;
+      }
       // eslint-disable-next-line no-unused-vars
       const { [remoteFileName]: deletedFile, ...afterDeletionEntriesState } =
         state.entries;

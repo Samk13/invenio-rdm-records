@@ -6,7 +6,7 @@
 // Invenio-RDM-Records is free software; you can redistribute it and/or modify it
 // under the terms of the MIT License; see LICENSE file for more details.
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Uppy from "@uppy/core";
 import { Dashboard } from "@uppy/react";
 import ImageEditor from "@uppy/image-editor";
@@ -133,6 +133,8 @@ export const UppyUploaderComponent = ({
     [transfersConfig]
   );
 
+  const previousFileIdsRef = useRef(new Set());
+
   const [uppy] = useState(() =>
     new Uppy({
       debug: false,
@@ -185,6 +187,22 @@ export const UppyUploaderComponent = ({
   React.useEffect(() => {
     uppy.setOptions({ restrictions });
   }, [uppy, restrictions]);
+
+  React.useEffect(() => {
+    const previousIds = previousFileIdsRef.current;
+    const currentIds = new Set(filesList.map((file) => file.uppyId).filter(Boolean));
+
+    previousIds.forEach((id) => {
+      if (!currentIds.has(id)) {
+        const uppyFile = uppy.getFile(id);
+        if (uppyFile) {
+          uppy.removeFile(id);
+        }
+      }
+    });
+
+    previousFileIdsRef.current = currentIds;
+  }, [uppy, filesList]);
 
   React.useEffect(() => {
     const dashboardPlugin = uppy.getPlugin("uppy-uploader-dashboard");

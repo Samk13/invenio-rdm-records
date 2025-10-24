@@ -28,6 +28,7 @@ export const getFilesList = (filesState) => {
       },
       progressPercentage: fileState.progressPercentage,
       cancelUploadFn: fileState.cancelUploadFn,
+      uppyId: fileState.uppyFileId,
     };
   });
 
